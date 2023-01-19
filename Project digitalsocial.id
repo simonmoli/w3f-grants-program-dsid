@@ -1,172 +1,224 @@
-# Name of your Project
+# Project Aurras - MVP - Phase 1
 
-> This document will be part of the terms and conditions of your agreement and therefore needs to contain all the required information about the project. Don't remove any of the mandatory parts presented in bold letters or as headlines (except for the title)! Lines starting with a `>` (such as this one) should be removed. Please use markdown instead of HTML (e.g. `![](image.png)` instead of `<img>`). 
->
-> See the [Grants Program Process](https://github.com/w3f/Grants-Program/#pencil-process) on how to submit a proposal.
-- **Team Name:** Legal name of your team (e.g. Duo)
-- **Payment Address:** BTC, Ethereum (USDT/USDC/DAI) or Polkadot/Kusama (aUSD) payment address. Please also specify the currency. (e.g. 0x8920... (DAI))
-- **[Level](https://github.com/w3f/Grants-Program/tree/master#level_slider-levels):** 1, 2 or 3
+> This document is referenced in the terms and conditions and therefore needs to contain all the required information. Don't remove any of the mandatory parts presented in bold letters or as headlines! See the [Open Grants Program Process](https://github.com/w3f/Open-Grants-Program/blob/master/README_2.md) on how to submit a proposal.
 
-> :exclamation: *The combination of your GitHub account submitting the application and the payment address above will be your unique identifier during the program. Please keep them safe.*
+* **Team Name:** HugoByte AI Labs Private Limited
+* **Payment Address:** 1QKz2R86JKDuCLGAQE5fCH54BR5yV1rQNA
+
+*The above combination of your GitHub account submitting the application and payment address will be your unique identifier during the program. Please keep them safe.*
+
 ## Project Overview :page_facing_up:
-
-If this application is in response to an RFP, please indicate this on the first line of this section.
-
-If this is an application for a follow-up grant (the continuation of an earlier, successful W3F grant), please provide name and/or pull request of said grant on the first line of this section.
 
 ### Overview
 
-Please provide the following:
+Aurras is a middleware that acts as an event processor and a low code workflow orchestration platform. Aurras is being pitched as a next-generation system for enabling decentralized push notification. This middleware solution listens to events from blockchain applications and propagates them to a registered pool of MQTT brokers. The broader architecture consist of parachain from which the middleware listens for the events.
 
-- If the name of your project is not descriptive, a tag line (one sentence summary).
-- A brief description of your project.
-- An indication of how your project relates to / integrates into Substrate / Polkadot / Kusama.
-- An indication of why your team is interested in creating this project.
+Aurras as a part of Substrate / Kusama / Polkadot / Web 3 Ecosystem
 
+* A core part of Decentralized Push Notification Architecture
+* Can be used for business-critical and production-grade IoT devices to listen to events from blockchain
+* Can be used with microservices across industry verticals
+* Can be expanded to get integrated with data analytics, knowledge visualization, and machine and deep learning (ML/DL) algorithms
+  
 ### Project Details
 
-We expect the teams to already have a solid idea about your project's expected final state. Therefore, we ask the teams to submit (where relevant):
+#### Architecture
 
-- Mockups/designs of any UI components
-- Data models / API specifications of the core functionality
-- An overview of the technology stack to be used
-- Documentation of core components, protocols, architecture, etc. to be deployed
-- PoC/MVP or other relevant prior work or research on the topic
-- What your project is _not_ or will _not_ provide or implement
-  - This is a place for you to manage expectations and to clarify any limitations that might not be obvious
+![](https://storage.googleapis.com/hugobyte-2.appspot.com/Aurras%20Architecture.png)
 
+#### Technologies
 
-Things that shouldn’t be part of the application (see also our [FAQ](../docs/faq.md)):
-- The (future) tokenomics of your project 
-- For non-infrastructure projects—deployment and hosting costs, maintenance or audits
-- Business-oriented activities (marketing, business planning), events or outreach
+1. [Apache OpenWhisk](https://openwhisk.apache.org) is an open source, distributed Serverless platform that executes functions (fx) in response to events at any scale. OpenWhisk manages the infrastructure, servers and scaling using Docker containers. The OpenWhisk platform supports a programming model in which developers write functional logic (called Actions), in any supported programming language, that can be dynamically scheduled and run in response to associated events (via Triggers) from external sources (Feeds) or from HTTP requests
+2. [Apache Kafka](https://kafka.apache.org) is an open-source distributed event streaming platform. Kafka works well as a replacement for a more traditional message broker. Message brokers are used for a variety of reasons (to decouple processing from data producers, to buffer unprocessed messages, etc.). In comparison to most messaging systems, Kafka has better throughput, built-in partitioning, replication, and fault-tolerance which makes it a good solution for large scale message processing applications.
+3. Docker
+4. Substrate
+5. Rust  
+6. Go
+
+#### Components
+
+1. **Event Sources (Substrate Event Feed)**  
+This is the source for events from the blockchain and the events will be sent to the OpenWhisk system. The MVP event source will be implemented using [polkadot-js/api](https://github.com/polkadot-js/api). For the actual implementation, we will be using a custom version of the substrate archive. Substrate archive will be indexing the blocks and an event actor will be decoding the events and data from the block and posting them to the OpenWhisk system. The indexer will use a NoSQL database to store the last indexed block and metadata. Using the substrate indexer as our event source will help us in solving many challenges ranging from fault tolerance to scalability to uniquely identifying multiple events with the same payload within a single block. The indexer will be connected to a substrate-based chain and RocksDB where the chain data is stored. When a new block is produced by the chain, the indexer collects the raw blocks from the RocksDB and sends it to the event actor. The event actor processes the block. The block data is decoded using the parity scale codec and mapped with the data types provided to the runtime. Once the event is decoded, the event actor posts a trigger to the event trigger manager.  
+
+2. **Event Trigger Manager**  
+Event trigger manager is composed of multiple actions including using a database to store trigger URLs and their respective auths, and Kafka provider, consumer and producer. Once the event manager receives an event from the event feed, this data is produced to a topic. The feed action in the trigger manager lets the user hook into the system. That is,  once an event is indexed to a particular topic, it can invoke a particular action. While creating the workflow, users can choose the event trigger as feed and provide necessary parameters from which chain it should be listening to and from which block it should start listening. Under the hood, a feed action is invoked with create lifecycle, which accepts the mandatory parameters the lifecycle, auth, trigger name, and other optional parameters of the event source. The feed action invokes the related actions of creating the entry in the database, adding to the Kafka consumer group, etc. The next component in the event trigger manager is a persistent connection to Kafka where it is used to produce and consume the stream of data. Once data is received in Kafka, the event trigger manager invokes the action to check the consumer groups for that particular topic and if found any, the trigger for the users under that particular group is invoked, which in turn invokes the workflow action.  
+
+3. **Workflow Composer**  
+Workflow composer consists of an async Rust library to compose multiple triggers, deployment configuration generator, and whisk deployment tool. For creating the workflow, the only input is the configuration file which is a YAML file. The workflow composition is laid out in the YAML which in turn takes care of the deployment and composing the triggers. Once a workflow is deployed to a namespace it creates a specific topic unique workflow id in Kafka. Workflow configuration comprises the input URL of workflow tasks, primarily GitHub repo, the sequence of processing tasks, and argument structure. Arguments must match the task input parameters.  
+
+4. **Web API Gateway and Backend Service**
+This is the end user facing component to utilize the workflow. This component comprises of a backend application which is responsible for user registration, selecting the workflow, managing / creating workflow using friendly APIs, providing input parameters. API gateway / Machine gateway where the external world can connect to the Aurras system.  
 
 ### Ecosystem Fit
 
-Help us locate your project in the Polkadot/Substrate/Kusama landscape and what problems it tries to solve by answering each of these questions:
+We have identified many great teams had to build their own implementation of event listeners/monitoring tools. We intend to make this aspect easier for the community to avoid most of the boilerplate so that they can just focus on workflow actions/tasks which are related to their project.
 
-- Where and how does your project fit into the ecosystem?
-- Who is your target audience (parachain/dapp/wallet/UI developers, designers, your own user base, some dapp's userbase, yourself)?
-- What need(s) does your project meet?
-- Are there any other projects similar to yours in the Substrate / Polkadot / Kusama ecosystem?
-  - If so, how is your project different?
-  - If not, are there similar projects in related ecosystems?
+* <https://github.com/playproject-io/datdot-service>
+* <https://github.com/open-web3-stack/guardian>
+
+Similar projects
+
+* <https://github.com/PipedreamHQ/pipedream>
+* <https://github.com/snakemake/snakemake>
+* <https://github.com/aelassas/Wexflow>
+
+What makes us different is
+
+As a part of Web 3 Community and Ecosystem
+
+* First class support to connect blockchains
+* Deployment and definition of workflows will be done through easy to write YAML configuration.
+* Workflow tasks can be written in multiple languages - NodeJS, Go, Java, Scala, PHP, Python, Ruby, Ballerina, .NET and Rust (We prefer and Recommend WASM compatible Rust)
+* First class support to MQTT Endpoints.  
 
 ## Team :busts_in_silhouette:
 
 ### Team members
 
-- Name of team leader
-- Names of team members
+* Dr. C. Pethuru Raj Ph.D - Principal Advisor, Chief Architect and Vice-President, Site Reliability Engineering (SRE) Division - Reliance Jio Platforms Ltd.
+* Muhammed Irfan K - Team Lead, Fullstack Developer, CTO & Co-Founder - HugoByte AI Labs
+* Hanumantappa Budihal - Solutions Architect, DevOps - HugoByte AI Labs 
+
+We will be hiring one Rust Developer
 
 ### Contact
 
-- **Contact Name:** Full name of the contact person in your team
-- **Contact Email:** Contact email (e.g. john@duo.com)
-- **Website:** Your website
+* **Contact Name:** Muhammed Irfan K
+* **Contact Email:** muhammedirfan@hugobyte.com
+* <https://hugobyte.com>
 
 ### Legal Structure
 
-- **Registered Address:** Address of your registered legal entity, if available. Please keep it in a single line. (e.g. High Street 1, London LK1 234, UK)
-- **Registered Legal Entity:** Name of your registered legal entity, if available. (e.g. Duo Ltd.)
+* **Registered Address:**  
+HugoByte AI Labs Private limited  
+1st & 2nd Floor, IBIS Hotel, Hosur Road, Bommanahalli, Bengaluru  
+Bangalore, Karnataka, India, 560068
+* **Registered Legal Entity:**  
+HugoByte AI Labs Private limited  
+CIN: U72900KA2020PTC140106
 
 ### Team's experience
 
-Please describe the team's relevant experience. If your project involves development work, we would appreciate it if you singled out a few interesting projects or contributions made by team members in the past. 
+* Dr. C. Pethuru Raj Ph.D  
+Dr. C. Pethuru Raj is currently working as Chief Architect and Vice president in the Site Reliability Engineering (SRE) Center of Excellence, Reliance Jio Platforms Ltd. (JPL) Bangalore. Previously worked as a cloud infrastructure architect in the IBM Global Cloud Center Of Excellence (CoE), IBM India Bangalore for four years. Before that, He had a long stint as TOGAF-certified enterprise architecture (EA) consultant in Wipro Consulting Services (WCS) Division, Also worked as a lead architect in the corporate research (CR) division of Robert Bosch Bangalore. In total, He has gained more than 17 years of IT industry experience and 8 years of research experience. Completed the CSIR-sponsored Ph.D. degree at Anna University, Chennai, and continued with the UGC-sponsored postdoctoral research in the Department of Computer Science and Automation, Indian Institute of Science, Bangalore. Thereafter, He was granted a couple of international research fellowships (JSPS and JST) to work as a research scientist for 3.5 years in two leading Japanese universities. Published more than 30 research papers in peer-reviewed journals such as IEEE, ACM, Springer-Verlag, Inderscience, etc. Having authored 25 books thus far that focus on some of the emerging technologies such as IoT, Cognitive Analytics, Blockchain, Digital Twin, Containerization, Data Science, Microservices Architecture, fog/edge computing, etc. Also have contributed more than 30 book chapters thus far for various technology books edited by highly acclaimed and accomplished professors and professionals. He is currently advising the team at HugoByte AI Labs on impactful technology innovations.
 
-If anyone on your team has applied for a grant at the Web3 Foundation previously, please list the name of the project and legal entity here.
+* Muhammed Irfan K  
+Muhammed Irfan K is a strategic thinker and implementer of innovative ideas with an emphasis on educating and bringing back privacy to the people. Having Co-Founded HugoByte AI Labs and Serving as CTO. He envisions a world where AI is open, distributed, and democratized by building a decentralized infrastructure and policy framework to regulate it. He has extensive experience in designing and building Highly Scalable Enterprise Architecture, Leading Team, Full-Stack Development, Microservices, Machine Learning.
+
+* Hanumantappa Budihal  
+Hanumantappa Budihal has 4 years of experience as an Application Developer and Azure DevOps Engineer. His technical skills include .NET Core Framework, Azure DevOps, SQL Developer, ASP .NET MVC, REST Web API, WPF, Microsoft Azure, Cognitive Services, Algorithms Design for a complex business requirement, and Watson Discovery, with good knowledge of Application Architecture and Design pattern implementation and data analysis skills. He is a hard worker moreover eager to learn new skills. He has also worked on cognitive application development using various IBM Bluemix services such as conversation, Natural language understanding, Watson discovery, and developed few chatbots using Api.ai and Microsoft bot framework. He is currently working as a Solutions Architect in HugoByte AI Labs.
 
 ### Team Code Repos
 
-- https://github.com/<your_organisation>/<project_1>
-- https://github.com/<your_organisation>/<project_2>
+Source codes will reside in
 
-Please also provide the GitHub accounts of all team members. If they contain no activity, references to projects hosted elsewhere or live are also fine.
+* <https://github.com/hugobyte>
 
-- https://github.com/<team_member_1>
-- https://github.com/<team_member_2>
+Repos for further reference
 
-### Team LinkedIn Profiles (if available)
+* <https://github.com/i7326/hackusama> ([Hackusama Submission](https://devpost.com/software/contact-tracing-chain))
+* <https://github.com/MuhammedIrfan>
+* <https://github.com/HanumantappaBudihal>  
 
-- https://www.linkedin.com/<person_1>
-- https://www.linkedin.com/<person_2>
+### Team Profiles
 
-
-## Development Status :open_book:
-
-If you've already started implementing your project or it is part of a larger repository, please provide a link and a description of the code here. In any case, please provide some documentation on the research and other work you have conducted before applying. This could be:
-
-- links to improvement proposals or [RFPs](https://github.com/w3f/Grants-Program/tree/master/docs/RFPs) (requests for proposal),
-- academic publications relevant to the problem,
-- links to your research diary, blog posts, articles, forum discussions or open GitHub issues,
-- references to conversations you might have had related to this project with anyone from the Web3 Foundation,
-- previous interface iterations, such as mock-ups and wireframes.
+* Dr. C. Pethuru Raj Ph.D - <https://sweetypeterdarren.wixsite.com/pethuru-raj-books>  
+* Muhammed Irfan K - <https://www.linkedin.com/in/muhammed-irfan-k>  
+* Hanumantappa Budihal - <https://www.linkedin.com/in/hanumantappa-budihal/>  
 
 ## Development Roadmap :nut_and_bolt:
 
-This section should break the development roadmap down into milestones and deliverables. To assist you in defining it, we have created a document with examples for some grant categories [here](../docs/Support%20Docs/grant_guidelines_per_category.md). Since these will be part of the agreement, it helps to describe _the functionality we should expect in as much detail as possible_, plus how we can verify and test that functionality. Whenever milestones are delivered, we refer to this document to ensure that everything has been delivered as expected.
-
-Below we provide an **example roadmap**. In the descriptions, it should be clear how your project is related to Substrate, Kusama or Polkadot. We _recommend_ that teams structure their roadmap as 1 milestone ≈ 1 month.
-
-> :exclamation: If any of your deliverables is based on somebody else's work, make sure you work and publish _under the terms of the license_ of the respective project and that you **highlight this fact in your milestone documentation** and in the source code if applicable! **Teams that submit others' work without attributing it will be immediately terminated.**
-
 ### Overview
 
-- **Total Estimated Duration:** Duration of the whole project (e.g. 2 months)
-- **Full-Time Equivalent (FTE):**  Average number of full-time employees working on the project throughout its duration (see [Wikipedia](https://en.wikipedia.org/wiki/Full-time_equivalent), e.g. 2 FTE)
-- **Total Costs:** Requested amount in USD for the whole project (e.g. 12,000 USD). Note that the acceptance criteria and additional benefits vary depending on the [level](../README.md#level_slider-levels) of funding requested. This and the costs for each milestone need to be provided in USD; if the grant is paid out in Bitcoin, the amount will be calculated according to the exchange rate at the time of payment.
+* **Description** Development of Project Aurras - MVP - Phase 1
+* **Total Estimated Duration:** 210 Person Days
+* **Full-time equivalent (FTE):**  Milestone 1 - 1.5; Milestone 2 and 3 - 3
+* **Total Costs:** 1.16 BTC
 
-### Milestone 1 Example — Basic functionality
+### Milestone 1 — Event Source - Substrate Event Feed
 
-- **Estimated duration:** 1 month
-- **FTE:**  1,5
-- **Costs:** 8,000 USD
-
-> :exclamation: **The default deliverables 0a-0d below are mandatory for all milestones**, and deliverable 0e at least for the last one. 
+* **Estimated Duration:** 30 Working Days
+* **FTE:**  1.5
+* **Costs:** 0.25 BTC
 
 | Number | Deliverable | Specification |
-| -----: | ----------- | ------------- |
-| **0a.** | License | Apache 2.0 / GPLv3 / MIT / Unlicense |
-| **0b.** | Documentation | We will provide both **inline documentation** of the code and a basic **tutorial** that explains how a user can (for example) spin up one of our Substrate nodes and send test transactions, which will show how the new functionality works. |
-| **0c.** | Testing and Testing Guide | Core functions will be fully covered by comprehensive unit tests to ensure functionality and robustness. In the guide, we will describe how to run these tests. |
-| **0d.** | Docker | We will provide a Dockerfile(s) that can be used to test all the functionality delivered with this milestone. |
-| 0e. | Article | We will publish an **article**/workshop that explains [...] (what was done/achieved as part of the grant). (Content, language and medium should reflect your target audience described above.) |
-| 1. | Substrate module: X | We will create a Substrate module that will... (Please list the functionality that will be implemented for the first milestone. You can refer to details provided in previous sections.) |
-| 2. | Substrate module: Y | The Y Substrate module will... |
-| 3. | Substrate module: Z | The Z Substrate module will... |
-| 4. | Substrate chain | Modules X, Y & Z of our custom chain will interact in such a way... (Please describe the deliverable here as detailed as possible) |
-| 5. | Library: ABC | We will deliver a JS library that will implement the functionality described under "ABC Library" |
-| 6. | Smart contracts: ... | We will deliver a set of ink! smart contracts that will...
+| ------------- | ------------- | ------------- |
+| 0a. | License | Apache 2.0  |
+| 0b. | Documentation | Documentation includes Inline Code Documentation, Configuration Documentation, Event Post Action Deployment guide, Docker and Docker compose setup documentation, Openwhisk Setup Documentation, Readme file |
+| 0c. | Testing Guide | The code will have unit-test coverage (min. 50%) to ensure functionality and robustness. In the guide we will describe how to run these tests |
+| 1a. | Substrate Event Feed: Configuration | Reading Configuration based on Environment, Override Configuration if Environment Variables provided, Configrations for Chain endpoint Sections and Methods from extrinsic to Exclude, types, Openwhisk Endpoint, Openwhisk Auth Key, Trigger Endpoint, Kafka Topic and Brokers |
+| 1b. | Substrate Event Feed: Chain Module | Connects to the chain, Add custom type to chain intialization if provided, Subscribes to system.events |  
+| 1c. | Substrate Event Feed: Event Module | Filters Events based on excludes provided, Post Events to trigger Endpoint |  
+| 1d. | Substrate Event Feed: Docker Image | Dockerfile for Substrate Event Feed Package  |  
+| 1e. | Substrate Event Feed: Docker Compose Configuration | Add Substrate Event Feed Service in Docker Compose Configuration |
+| 1f. | Substrate Event Feed: Helm Chart Configuration | Helm Chart Configuration for Substrate Event Feed for Kubernetes  |
+| 2. | Event Manager: Event Post Action | Minimal JS Implementation of Event POST Action with Payload as Kafka Topic, Broker and Event Data such as section, method and Event Payload |
 
+### Milestone 2 — Event Manager - Part 1
 
-### Milestone 2 Example — Additional features
+* **Estimated Duration:** 35 Working Days
+* **FTE:**  3
+* **Costs:** 0.58 BTC
 
-- **Estimated Duration:** 1 month
-- **FTE:**  1,5
-- **Costs:** 8,000 USD
+| Number | Deliverable | Specification |
+| ------------- | ------------- | ------------- |
+| 0a. | License | Apache 2.0  |
+| 0b. | Documentation | Documentation includes Inline Code Documentation, Configuration Documentation, Kafka and Zookeeper Deployment guide, wskdeploy guide, Readme file |
+| 0c. | Testing Guide | The code will have unit-test coverage (min. 50%) to ensure functionality and robustness. In the guide we will describe how to run these tests |  
+| 1a. | Kafka Provider: Fork | Fork Existing [openwhisk-package-kafka](https://github.com/apache/openwhisk-package-kafka/) |
+| 1b. | Kafka Provider: Helm Chart Configuration | Helm Chart Configuration for Kafka Provider for Kubernetes |
+| 2. | Database Service | Implement DB Service, DB Integration, Connect DB provided through configuration variables, Dockerfile for Containerization, Docker Compose Configuration |
+| 3a. | Event Manager: Event Source Registration | Integrate with DB service - CouchDB, Register Source with Chain Name, Chain Specification, Create Unique topic for provided Section-Method, Return created topics - Section-Method Map |
+| 3b. | Event Manager: Kafka provider feed action | Integrate with DB service - CouchDB, Add CREATE, READ, UPDATE, DELETE lifecycle methods for trigger, Validate parameters (Section-Method, broker, isJSONData, isBinaryValue, isBinaryKey), Get unique topic from DB using Section-Method param,Record topic and related trigger to DB on CREATE lifecycle |
+| 3c. | Event Manager: Deployment Config | Deployment Config for [wskdeploy](https://github.com/apache/openwhisk-wskdeploy) tool |
+| 3d. | Event Manager: Intermediate Container | Dockerfile for Containerization, Container with wsk cli and wskdeploy util, Script to add Openwhisk auth key, Deploy Openwhisk Actions and Create Triggers and Rules |
+| 3e. | Event Manager: Docker Compose Configuration | Docker Compose Configuration for Event Manager: Intermediate Container |
+| 3f. | Event Manager: Helm Chart Configuration | Helm Chart Configuration for Event Manager: Intermediate Container for Kubernetes |
 
-...
+### Milestone 3 — Event Manager - Part 2
 
+* **Estimated Duration:** 20 Days
+* **FTE:** 3
+* **Costs:** 0.33 BTC
+
+| Number | Deliverable | Specification |
+| ------------- | ------------- | ------------- |
+| 0a. | License | Apache 2.0  |
+| 0b. | Documentation | Documentation includes Inline Code Documentation, Configuration Documentation, Readme file |
+| 0c. | Testing Guide | The code will have unit-test coverage (min. 50%) to ensure functionality and robustness. In the guide we will describe how to run these tests |
+| 0d. | Article | We will write a Medium article that explains the work done as part of the grant. |
+| 1a. | Event Manager: Kafka Produce Action | Validate for parameters, Connect to provided brokers, Produce data to provided topic, Add deployment config to wskdeploy config |
+| 1b. | Event Manager: Kafka provider feed action | Integrate with DB service - CouchDB, Delete trigger from DB on DELETE lifecycle, Read trigger from DB on READ lifecycle, Update trigger from DB on UPDATE lifecycle |
+| 2a. | Substrate Event Feed: Configuration | CouchDB Config, Available Sections and Methods of the chain to create unique topics |
+| 2b. | Substrate Event Feed: Event Source Registration | Integrate with DB service - CouchDB, Save Unique ID in DB for topic provided through Event Manager: Event Source Registration |
 
 ## Future Plans
 
-Please include here
+We have planned immediate grant as second phase of our development (Draft with Complete deliverables can be found here <https://github.com/MuhammedIrfan/Open-Grants-Program/blob/master/applications/project_aurras_mvp.md>)
 
-- how you intend to use, enhance, promote and support your project in the short term, and
-- the team's long-term plans and intentions in relation to it.
+Immediate Plans in the timeline Includes
 
-## Referral Program (optional) :moneybag: 
+* Develop full fledge system
+* Implement Custom Version of Substrate Archive
+* Add more operators
+* Add Analytics and Monitoring  
+* MQTT Endpoints  
+* Decentralized push notification  
 
-You can find more information about the program [here](../README.md#moneybag-referral-program).
-- **Referrer:** Name of the Polkadot Ambassador or GitHub account of the Web3 Foundation grantee
-- **Payment Address:** BTC, Ethereum (USDT/USDC/DAI) or Polkadot/Kusama (aUSD) payment address. Please also specify the currency. (e.g. 0x8920... (DAI))
+Our Roadmap includes
+
+* Decentralized Pub/Sub Network to replace Apache Kafka in Aurras
+* WASI Runtime for Openwhisk
 
 ## Additional Information :heavy_plus_sign:
 
-**How did you hear about the Grants Program?** Web3 Foundation Website / Medium / Twitter / Element / Announcement by another team / personal recommendation / etc.
+Any additional information that you think is relevant to this application that hasn't already been included.
 
-Here you can also add any additional information that you think is relevant to this application but isn't part of it already, such as:
+Possible additional information to include:
 
-- Work you have already done.
-- If there are any other teams who have already contributed (financially) to the project.
-- Previous grants you may have applied for.
+* What work has been done so far?  
+This is our first grant as a part of bringing innovation to the web3 Ecosystem.
+* Are there are any teams who have already contributed (financially) to the project?  
+No
+* Have you applied for other grants so far?  
+No
